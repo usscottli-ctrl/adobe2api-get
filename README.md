@@ -1,7 +1,710 @@
 # adobe2api-plus
 
-跑 Firefly / GPT Image 号池时，最难受的是 **408 频发**、号莫名废掉、接口对不齐。
+跑 **Adobe Firefly / GPT Image** 号池时，最常见的痛点是：
+
+- 上游 **408** 频发，池子不稳
+- 号容易被误伤，越跑越空
+- 接口和中转站 / OpenAI 客户端对不齐，接入成本高
 
 **这版重点把 408 压住了**，号更稳、少误杀；照常按 OpenAI 风格接中转就能用。
 
-本仓无代码。源码加微信 **xingze063**（备注 `adobe2api`）。
+> 本仓 **无代码**，仅作公开介绍与获取指引。源码请加微信 **xingze063**（备注 `adobe2api`）。
+
+---
+
+## 目录
+
+- [适合谁](#适合谁)
+- [功能亮点](#功能亮点)
+- [截图预览](#截图预览截图待补)
+- [OpenAI 风格接入示例](#openai-风格接入示例)
+- [获取源码](#获取源码)
+- [说明](#说明)
+- [上游公开 README](#上游公开-readme)
+
+---
+
+## 适合谁
+
+- 已经在跑 / 准备跑 **Adobe Firefly 第三方模型**（含 GPT Image 等）的号池运营
+- 需要把号池接到 New API / One API / Sub2 一类中转，或直接给业务侧用 OpenAI 风格客户端
+- 希望账号与任务能在后台统一运维，而不是散落在脚本里
+
+---
+
+## 功能亮点
+
+### OpenAI 兼容网关
+
+对外提供熟悉的图像接口，方便挂到现有中转与测试工具：
+
+- `POST /v1/images/generations` — 文生图
+- `POST /v1/images/edits` — 图生图 / 多参考编辑
+- 另有 chat / video 等扩展入口（按发行版能力启用）
+
+鉴权支持：
+
+- `Authorization: Bearer <api_key>`
+- 或 `X-API-Key: <api_key>`
+
+把 `BASE_URL` 指到你的实例，模型名按 Firefly / GPT Image 族配置即可。
+
+### Firefly / GPT Image 号池出图
+
+围绕 Adobe Firefly 第三方模型组织账号与任务：
+
+- **GPT Image** 系列（含常见 2.5 型号等）
+- Firefly 侧其它图像模型族（按上游实际开放情况启用）
+- 分辨率 / 比例用模型 ID 或请求参数表达，方便中转站统一路由
+
+> 可见型号以你部署的发行版后台为准。
+
+### 对 408 更稳、少误杀
+
+针对上游常见的 408 / 不稳定场景做了强化，目标是：
+
+- 池子更扛打
+- 客户侧少无故失败
+- **少误杀可用账号**
+
+具体实现随源码交付，本介绍页不展开。
+
+### 账号池管理
+
+- 多账号入库与状态管理
+- 支持代理（可选）
+- 任务调度与凭据维护集中在一套服务里
+
+### 管理后台
+
+浏览器即可运维：
+
+- 账号管理
+- 任务列表与状态
+- 系统设置 / API Key
+- 产量与使用统计
+
+### 多参考图 / 编辑
+
+`/v1/images/edits` 支持带输入图的编辑与多参考场景，兼容 OpenAI 风格传图方式，适合角色一致性、产品图改款等业务。
+
+### 任务持久化与错误分层
+
+- Web 接单 + Worker 执行，任务可持久化
+- 对外错误尽量分层（参数 / 审核 / 临时不可用 / 池耗尽等），方便中转站按类型决定是否重试
+
+---
+
+## 截图预览（截图待补）
+
+> 下列为占位图链接，图片放在 [`docs/screenshots/`](docs/screenshots/)（目前仅占位，**截图待补**）。
+
+![管理后台 · 账号列表](docs/screenshots/admin-accounts.png)
+
+![管理后台 · 任务列表](docs/screenshots/admin-jobs.png)
+
+![管理后台 · 系统设置](docs/screenshots/admin-settings.png)
+
+![Playground / 测试出图](docs/screenshots/playground-generate.png)
+
+![多参考编辑示例](docs/screenshots/playground-edits.png)
+
+---
+
+## OpenAI 风格接入示例
+
+把下面的 `BASE_URL`、`sk-xxx`、模型名换成你的实例即可。  
+（示例仅演示调用方式，**本仓不含可运行服务端代码**。）
+
+### 文生图 — `/v1/images/generations`
+
+```bash
+curl -sS "https://BASE_URL/v1/images/generations" \
+  -H "Authorization: Bearer sk-xxx" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gpt-image-2.5-sunburst-2k-1x1",
+    "prompt": "a quiet street at dusk, cinematic lighting",
+    "n": 1,
+    "size": "1024x1024",
+    "response_format": "url"
+  }'
+```
+
+### 图生图 / 编辑 — `/v1/images/edits`（可选）
+
+```bash
+curl -sS "https://BASE_URL/v1/images/edits" \
+  -H "Authorization: Bearer sk-xxx" \
+  -F "model=gpt-image-2.5-sunburst-2k-1x1" \
+  -F "prompt=keep the same product, change background to soft studio light" \
+  -F "image=@./ref1.png" \
+  -F "response_format=url"
+```
+
+多参考示例：
+
+```bash
+curl -sS "https://BASE_URL/v1/images/edits" \
+  -H "Authorization: Bearer sk-xxx" \
+  -F "model=gpt-image-2.5-sunburst-2k-1x1" \
+  -F "prompt=merge style from references, keep subject identity" \
+  -F "image=@./ref1.png" \
+  -F "image=@./ref2.png" \
+  -F "response_format=url"
+```
+
+### 接到中转站时
+
+| 项 | 建议 |
+|---|---|
+| Base URL | `https://BASE_URL/v1` |
+| API Key | 号池后台创建的 Key（示例里的 `sk-xxx`） |
+| 模型 | 与号池可见模型 ID 对齐 |
+| 重试 | 临时不可用可重试；审核拒审不要盲重试 |
+
+---
+
+## 获取源码
+
+本仓库是 **引流 / 介绍页**，**不包含任何业务源码**。
+
+需要完整项目：
+
+1. 微信添加 **xingze063**
+2. 备注：`adobe2api`
+3. 说明用途（自用号池 / 中转对接 / 二次开发等），通过后发送获取方式
+
+请勿在 Issues 里索要私有源码附件。
+
+---
+
+## 说明
+
+- 名称沿用社区常见的 `adobe2api-plus` 方向：Adobe Firefly 能力 + OpenAI 兼容网关。
+- Adobe、Firefly、GPT Image、OpenAI 等为各自权利人商标；本介绍仅描述兼容与对接关系。
+- 上游策略与模型开放列表可能变化；以你实际拿到的发行版为准。
+- 请遵守相关服务条款，合理使用账号与出口资源。
+
+---
+
+**本仓无代码。源码加微信 xingze063（备注 `adobe2api`）。**
+
+---
+
+## 上游公开 README
+
+以下为上游公开项目 **adobe2api-plus** 的 README（基于 [leik1000/adobe2api](https://github.com/leik1000/adobe2api) 用 Next.js 重写，致谢原作者 [leik1000](https://github.com/leik1000) 及贡献者）。原 `leik1000/adobe2api` 仓库若因平台策略无法访问，请以下方 songsongQAQ/adobe2api-plus 公开 README 为准。
+
+> 说明：以下为上游已公开原文，完整保留；其中若含 408 等相关公开描述，属于上游文档，并非本引流页对私有方案的说明。
+
+
+# adobe2api-plus
+
+> English README: [`README_EN.md`](README_EN.md)
+
+> 本项目基于 [adobe2api](https://github.com/leik1000/adobe2api) 用 **Next.js（App Router）+ TypeScript** 重写，感谢原作者 [leik1000](https://github.com/leik1000) 及该项目的所有贡献者。
+
+Adobe Firefly / OpenAI 兼容网关服务，基于 **Next.js（App Router）+ TypeScript** 构建。
+
+当前设计：
+
+- 对外统一入口：`/v1/chat/completions`（图像 + 视频）
+- 图像专用接口：`/v1/images/generations`、`/v1/images/edits`
+- 视频专用接口：`/v1/video/generations`（异步任务）
+- Adobe 账号池管理（手动 Token + Cookie 自动刷新）
+- 管理后台 Web UI：账号 / 任务 / 代理池 / 系统设置
+- 独立 Worker 进程执行持久化任务与 Token 刷新
+
+---
+
+## 408 风控解决原理
+
+Adobe Firefly 的第三方模型端点（`firefly-3p.ff.adobe.io`，承载 GPT / Flux / Gemini 等）在提交环境不达标时返回 `408`（「system under load」）。实测证明这个 `408` **并非真正的高负载，也并非账号被标记，而是对提交环境的判定结果**：
+
+1. **根因**：408 的开关变量是**提交环境**——即 sherlockToken 质量（由铸造方式 × 铸造 IP 决定），与账号标记无关。环境不达标（HEADLESS、数据中心出口、无 arp / 伪造 arp）→ 恒定 408；有头铸造产出「好」token 之后才会进入正常的账号判定环节。
+
+sherlockToken 实测矩阵（铸造方式 × 铸造 IP 类型 → token 质量）：
+
+| 铸造方式 | 铸造 IP 类型 | token 质量 |
+|---|---|---|
+| HEADED（有头） | 任意（直连数据中心也行） | 好 |
+| HEADLESS + 住宅代理 | 住宅 | 中 |
+| HEADLESS + 直连/数据中心 | 数据中心 | 坏 |
+| 无 arp / 伪造 arp | — | 无 |
+
+> 有头铸造是产出「好」token 的必要条件，因此内置 mint 服务默认 HEADED。
+
+2. **处理策略**：
+   - **408 → 自动重铸 sherlockToken 后重试**：提交遇到 408（`timeout_error`）时，不再标记账号风控，立即强制重铸全局 sherlockToken（全新浏览器环境，等同一枚新 token），同账号自动重试（最多 3 次）。每次重铸与重试都会记录在任务的**操作记录**里（`SHERLOCK_REMINT` 事件）。
+   - **401 → 彻底删除**：401 表示 token 已失效，直接删除账号（任务历史靠快照保留），与 408 明确区分。
+
+3. **sherlockToken（`x-arp-session-id`）**：维护浏览器会话态，通过内置 [fingerprint-chromium](https://github.com/adryfish/fingerprint-chromium) 铸造服务（headful + Xvfb）自动铸造或手动输入，由 worker 按固定周期（默认 5 分钟）自动刷新，提交链路自动使用最新 token。
+
+> 🎁 sherlockToken 由内置 fingerprint-chromium 铸造服务自动维护，Docker 一键部署零配置开箱即用。
+
+---
+
+## 目录
+
+- [1. 部署方式](#1-部署方式)
+- [2. 服务鉴权](#2-服务鉴权)
+- [3. 外部 API 使用](#3-外部-api-使用)
+- [4. 账号 / 凭据导入](#4-账号--凭据导入)
+- [5. 管理后台](#5-管理后台)
+- [6. 存储路径](#6-存储路径)
+- [7. 环境变量配置](#7-环境变量配置)
+- [8. 技术栈](#8-技术栈)
+
+---
+
+## 1. 部署方式
+
+### Docker 一键部署（推荐）
+
+前置：一台 **x86_64 Linux 服务器**（内置铸造用的 fingerprint-chromium 仅发布 x86_64 二进制）并安装好 [Docker](https://www.docker.com/) 与 Docker Compose。Apple Silicon 机器可用 Docker Desktop 本地体验（amd64 模拟能跑但铸造较慢，不建议做生产环境）。
+
+1. **克隆项目**：
+
+```bash
+git clone https://github.com/songsongQAQ/adobe2api-plus.git
+cd adobe2api-plus
+```
+
+2. **一键构建并启动**（零配置，开箱即用——自动拉取 MySQL 8 镜像、创建数据库与表结构、启动 Web + Worker + mint 铸造服务）：
+
+```bash
+docker compose up -d --build
+```
+
+3. **sherlockToken 铸造流程（内置 fingerprint-chromium）**：
+
+- **Docker 一键部署（自动，无需任何配置）**：内置 `mint` 容器（fingerprint-chromium 148 + Xvfb 有头铸造）。worker 每 5 分钟自动向 mint 铸造新 token 并全局保存，提交链路自动携带最新值，全程无外部依赖。
+- **本地开发（自动）**：`.env.development` 设置 `FP_CHROME_BIN`（本进程直启 fingerprint-chromium 铸造）或 `SHERLOCK_MINT_API`（连接自建/远程 mint 铸造服务）。
+- **手动输入（兜底）**：未配置任何铸造引擎时，在后台「sherlock」页粘贴手动获取的 token，不影响其它功能。获取方式：在已登录 `firefly.adobe.com` 的浏览器控制台执行：
+  ```js
+  copy(document.cookie.match(/(?:^|;\s*)sherlockToken=([^;]+)/)?.[1] ?? "")
+  ```
+
+4. **访问管理后台**：
+
+- 地址：`http://127.0.0.1:${WEB_PORT:-3000}/login`
+- 账号：`admin`
+- 密码：`admin`
+
+> - **默认管理员账号密码为 `admin` / `admin`**（首次启动自动创建），**生产环境务必修改**。
+> - 安全密钥（`SESSION_SECRET` / `ENCRYPTION_KEY`）已内置默认值，开箱即用。生产环境请创建 `.env` 覆盖：`cp .env.example .env`，用 `openssl rand -hex 32`（会话密钥）与 `openssl rand -hex 32`（加密密钥）生成自己的随机值。
+> - 数据库（MySQL 8）随 compose 自动启动，表结构由应用首次启动时自动迁移，**无需手动 `db:push`**。
+> - 数据持久化：MySQL 数据在 `mysql-data` 卷，生成媒体在 `generated-media` 卷。
+> - 查看状态/日志：`docker compose ps`、`docker compose logs -f web worker`。
+> - 数据库账号默认 `adobe / adobe`（库名 `adobe`），可通过 `.env` 的 `MYSQL_USER` / `MYSQL_PASSWORD` / `MYSQL_DATABASE` 覆盖。
+
+### 本地开发 / 运行
+
+依赖：Node.js 20+、MySQL 8.x（或 MariaDB 10.x）。
+
+1. **安装依赖**：
+
+```bash
+npm install
+```
+
+2. **准备环境变量**：
+
+```bash
+cp .env.example .env.development
+# 编辑 .env.development，填入数据库连接、密钥、管理员初始账号
+```
+
+3. **启动 Web 服务**：
+
+```bash
+npm run dev
+```
+
+4. **另开进程启动 Worker**（执行 Adobe 任务与 Token 刷新）：
+
+```bash
+npm run worker
+```
+
+5. **访问管理后台**：
+
+- 地址：`http://127.0.0.1:3000/login`
+- 默认管理员账号由 `ADMIN_BOOTSTRAP_USERNAME` / `ADMIN_BOOTSTRAP_PASSWORD` 决定
+- 登录后可在「系统设置 → 账户与安全」修改
+
+### 数据库初始化
+
+数据库表由 Drizzle schema 映射（`src/lib/db/schema.ts`）：
+
+```bash
+npm run db:push        # 将 schema 同步到数据库
+npm run db:generate    # 生成迁移文件（仅在刻意变更表结构时使用）
+```
+
+---
+
+## 2. 服务鉴权
+
+服务 API Key 在管理后台「系统设置 → 账户与安全」中创建，创建后**只显示一次**，请立即保存。
+
+调用外部 API 时，使用以下任一方式：
+
+- `Authorization: Bearer <api_key>`
+- `X-API-Key: <api_key>`
+
+> API Key 前缀为 `adobe_`。管理后台与管理 API 需要先通过 `/api/auth/login` 登录并持有会话 Cookie，与外部生成 API 的鉴权相互独立。
+
+---
+
+## 3. 外部 API 使用
+
+### 3.0 支持的模型族
+
+模型 ID 采用 `{family}-{分辨率}-{比例}` 或 `{family}-{时长}s-{比例}-{分辨率}` 的命名。为兼容旧 `adobe2api` 调用方，也接受带 `firefly-` 前缀的模型 ID（自动归一化）。
+
+#### 图像模型
+
+Nano Banana / Nano Banana Pro（上游 `nano-banana-2`）：
+
+- 命名：`nano-banana-{res}-{ratio}` / `nano-banana-pro-{res}-{ratio}`
+- 分辨率：`1k` / `2k` / `4k`
+- 比例后缀：`1x1` / `16x9` / `9x16` / `4x3` / `3x4` / `5x4` / `4x5` / `3x2` / `2x3` / `21x9`
+- 示例：`nano-banana-pro-2k-16x9`、`nano-banana-4k-1x1`
+
+Nano Banana 2（上游 `nano-banana-3`）：
+
+- 命名：`nano-banana2-{res}-{ratio}`
+- 分辨率：`1k` / `2k` / `4k`
+- 额外支持超长比例：`1x8` / `1x4` / `4x1` / `8x1`
+- 示例：`nano-banana2-2k-16x9`、`nano-banana2-2k-1x8`
+
+GPT Image（上游 `gpt-image`，版本 `2`）：
+
+- 命名：`gpt-image-{res}-{ratio}`
+- 分辨率：`1k` / `2k` / `4k`
+- 示例：`gpt-image-2k-16x9`、`gpt-image-4k-1x1`
+
+> `aspect_ratio=auto` **不支持**，请求传入 `auto` 会回退为 `1:1`，请显式传具体比例或使用带比例后缀的模型 ID。默认模型为 `nano-banana-pro-2k-16x9`。
+
+#### 视频模型
+
+Sora2 / Sora2 Pro：
+
+- 命名：`sora2-{dur}s-{ratio}` / `sora2-pro-{dur}s-{ratio}`
+- 时长：`4s` / `8s` / `12s`；比例：`9x16` / `16x9`
+- 示例：`sora2-4s-16x9`、`sora2-pro-8s-9x16`
+
+Veo31（帧模式）：
+
+- 命名：`veo31-{dur}s-{ratio}-{res}`
+- 时长：`4s` / `6s` / `8s`；比例：`16x9` / `9x16`；分辨率：`720p` / `1080p`
+- 1 张参考图 = 首帧；2 张 = 首帧 + 尾帧
+- 示例：`veo31-4s-16x9-1080p`
+
+Veo31 Ref（参考图模式）：
+
+- 命名：`veo31-ref-{dur}s-{ratio}-{res}`
+- 最多 3 张参考图
+- 示例：`veo31-ref-6s-9x16-720p`
+
+Gemini Omni：
+
+- 命名：`gemini-omni-{dur}s-{ratio}-{res}`
+- 时长：`4s` / `6s` / `8s` / `10s`；分辨率：`720p` / `1080p`
+- 最多 4 张图片参考（风格）+ 1 个视频参考（来源）
+- 不带分辨率的兼容模型 ID 默认 `720p`
+- 示例：`gemini-omni-10s-16x9-1080p`
+
+Kling 3.0：
+
+- 命名：`kling3-{dur}s-{ratio}-{res}`
+- 时长：`5s` / `10s` / `15s`；比例：`16x9` / `9x16`
+- 1 张为首帧，2 张为首帧 + 尾帧；音频默认开启
+- 不带分辨率的兼容模型 ID 默认 `720p`
+- 示例：`kling3-5s-16x9-720p`、`kling3-15s-9x16`
+
+Kling O3：
+
+- 命名：`kling-o3-{dur}s-{ratio}-{res}`
+- 时长：`5s` / `15s`；分辨率：`720p` / `1080p`
+- 支持通过 `@entity:实体名` 引用已创建实体
+- 不带分辨率的兼容模型 ID 默认 `1080p`
+- 示例：`kling-o3-5s-16x9`
+
+Seedance 2.0 / 2.0 Fast：
+
+- 命名：`seedance20-{dur}s-{ratio}-{res}` / `seedance20-fast-{dur}s-{ratio}-{res}`
+- 时长：`4s` ~ `15s`；比例：`21x9` / `16x9` / `4x3` / `1x1` / `3x4` / `9x16`；分辨率：`480p` / `720p` / `1080p`
+- 最多 9 张图片（风格）+ 3 个视频（来源）+ 3 个音频（来源），三类合计最多 12 项
+- 音频参考必须搭配至少 1 张图片或 1 个视频；音频默认开启
+- 示例：`seedance20-4s-16x9-480p`、`seedance20-fast-15s-9x16-1080p`
+
+### 3.1 获取模型列表
+
+```bash
+curl -X GET "http://127.0.0.1:3000/v1/models" \
+  -H "Authorization: Bearer <service_api_key>"
+```
+
+管理后台「系统设置」中可配置对外可见的模型子集。
+
+### 3.2 统一入口：`/v1/chat/completions`
+
+文生图：
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/chat/completions" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro-2k-16x9",
+    "messages": [{"role":"user","content":"a cinematic mountain sunrise"}]
+  }'
+```
+
+图生图（在最新 user 消息中传入图片）：
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/chat/completions" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro-2k-16x9",
+    "messages": [{
+      "role":"user",
+      "content":[
+        {"type":"text","text":"turn this photo into watercolor style"},
+        {"type":"image_url","image_url":{"url":"https://example.com/input.jpg"}}
+      ]
+    }]
+  }'
+```
+
+文生视频：
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/chat/completions" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "sora2-4s-16x9",
+    "messages": [{"role":"user","content":"a drone shot over snowy forest"}]
+  }'
+```
+
+图生视频：
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/chat/completions" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "sora2-8s-9x16",
+    "messages": [{
+      "role":"user",
+      "content":[
+        {"type":"text","text":"animate this character walking forward"},
+        {"type":"image_url","image_url":{"url":"https://example.com/character.png"}}
+      ]
+    }]
+  }'
+```
+
+Gemini Omni 视频参考（在最新 user 消息中传入视频）：
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/chat/completions" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini-omni-10s-16x9-1080p",
+    "messages": [{
+      "role":"user",
+      "content":[
+        {"type":"text","text":"continue this scene with a smooth camera move"},
+        {"type":"video_url","video_url":{"url":"https://example.com/reference.mp4"}}
+      ]
+    }]
+  }'
+```
+
+支持在请求中设置 `"stream": true` 以 SSE 流式接收生成进度。
+
+### 3.3 图像接口：`/v1/images/generations`
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/images/generations" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro-4k-16x9",
+    "prompt": "futuristic city skyline at dusk"
+  }'
+```
+
+### 3.4 图像编辑：`/v1/images/edits`
+
+在原图基础上按提示词编辑：
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/images/edits" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "nano-banana-pro-2k-1x1",
+    "prompt": "replace the background with a beach",
+    "image": "https://example.com/input.jpg"
+  }'
+```
+
+### 3.5 视频接口：`/v1/video/generations`（异步）
+
+文生视频走异步任务，提交后返回 `task_id`，再轮询查询结果：
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/video/generations" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "kling3-5s-16x9-720p",
+    "prompt": "a cat walking in a neon city"
+  }'
+```
+
+```bash
+curl -X GET "http://127.0.0.1:3000/v1/video/generations/<task_id>" \
+  -H "Authorization: Bearer <service_api_key>"
+```
+
+### 3.6 实体创建与可灵（Kling）引用
+
+实体用于 Kling O3 保持角色或物体一致。实体绑定到创建它的 Adobe 账号，服务会自动获取该账号的 Creative Cloud 仓库。
+
+创建实体：
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/entities" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "PinkWarrior",
+    "type": "character",
+    "description": "A pink-haired warrior woman in futuristic armor.",
+    "images": [
+      "data:image/png;base64,<base64_image>"
+    ]
+  }'
+```
+
+- `name`：实体名，后续在 prompt 中使用 `@entity:name` 引用；不要包含 `@`
+- `type`：`character` / `object` / `location`
+- `description`：实体特征描述
+- `images`：1 到 4 张图片，支持 `data:image/...;base64,...` 或纯 base64
+
+查看本地已绑定实体：
+
+```bash
+curl -X GET "http://127.0.0.1:3000/v1/entities" \
+  -H "Authorization: Bearer <service_api_key>"
+```
+
+在 Kling O3 中引用实体：
+
+```bash
+curl -X POST "http://127.0.0.1:3000/v1/chat/completions" \
+  -H "Authorization: Bearer <service_api_key>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "kling-o3-5s-16x9",
+    "messages": [{
+      "role": "user",
+      "content": "A cinematic shot of @entity:PinkWarrior walking through a neon city."
+    }]
+  }'
+```
+
+---
+
+## 4. 账号 / 凭据导入
+
+Adobe 账号凭据（Token、Cookie、`ims_sid`）用于向 Adobe Firefly 请求生成，并支持 Cookie 自动刷新。
+
+### 方式 A：管理后台上传（推荐）
+
+1. 访问并登录管理后台
+2. 打开「账号」页
+3. 点击「批量导入」，上传 JSON 文件或粘贴内容
+4. 支持结构：`{users:[...]}`、`{accounts:[...]}` 或顶层数组
+5. 每个账号支持字段：`token`、`cookie`、`ims_sid`、`email`、`display_name`、`account_id`、额度字段等
+6. 导入完成后，可在列表中对带 Cookie 的账号执行「刷新积分」批量刷新
+
+> 导入的内容仅加密保存；`source_host` / `password` 仅作兼容读取，代理请在「代理池」配置。
+
+### 方式 B：手动单条添加
+
+在「账号」页填写单个账号的 `token` / `cookie` / `ims_sid` 与额度字段后保存。
+
+---
+
+## 5. 管理后台
+
+登录后提供以下页面：
+
+| 页面 | 功能 |
+|------|------|
+| 概览 | 运行状态总览 |
+| 账号 | Adobe 账号 / Token 管理（批量导入、刷新积分、导出 Cookie、风控解除） |
+| 任务 | 生成任务队列与状态 |
+| 代理池 | 代理节点管理，用于分散请求出口 |
+| 系统设置 | 四类配置（见下） |
+
+「系统设置」四页签：
+
+- **账户与安全**：管理员账号、服务 API Key、公共 URL、对外可见模型
+- **代理与网络**：代理池开关、图片/视频生成超时
+- **重试与容错**：自动重试、最大尝试次数、退避、可重试状态码、账号轮换策略
+- **刷新与存储**：Token 自动刷新间隔与并发、单账号最高并发、生成文件容量与清理阈值
+
+---
+
+## 6. 存储路径
+
+- 生成媒体文件：`data/generated/`（默认，可由 `MEDIA_ROOT` 覆盖）
+- 对外访问前缀：`/generated/`（默认，可由 `MEDIA_PUBLIC_PREFIX` 覆盖）
+- 数据库（MySQL）是唯一运行时数据源：账号、Token、任务、媒体资产、系统设置均落库
+
+生成媒体保留策略：
+
+- 按容量阈值自动清理（最旧优先）：`generated_max_size_mb`、`generated_prune_size_mb`（在「系统设置 → 刷新与存储」配置）
+- 超过上限时自动删除旧文件，直到总大小降回阈值以内
+
+---
+
+## 7. 环境变量配置
+
+Web 与 Worker 在启动前会主动校验配置（`validateRuntime`），关键配置缺失会在监听前直接失败，而非延迟到首个请求。
+
+| 变量 | 必填 | 说明 |
+|------|------|------|
+| `DATABASE_URL` | 本地开发 ✅ / Docker 自动 | MySQL 连接串（`mysql:` 协议，含库名） |
+| `SESSION_SECRET` | Docker 内置默认 | 会话签名密钥（≥32 字节） |
+| `ENCRYPTION_KEY` | Docker 内置默认 | 凭据加密密钥（≥16 字节） |
+| `ADMIN_BOOTSTRAP_USERNAME` | 默认 `admin` | 管理员初始账号（首次启动自动创建） |
+| `ADMIN_BOOTSTRAP_PASSWORD` | 默认 `admin` | 管理员初始密码 |
+
+> 其余参数（生成媒体目录、Adobe 上游地址、Token 刷新间隔、媒体保留时长、代理池等）均可在管理后台「系统设置」中配置，无需通过环境变量设置。
+>
+> sherlockToken 自动铸造变量（`SHERLOCK_MINT_API` / `FP_CHROME_BIN` 等）见 `.env.example`；Docker 一键部署无需配置（内置 mint 容器）；均不配置则走后台手动输入 token。
+
+---
+
+## 8. 技术栈
+
+- Next.js（App Router）
+- TypeScript
+- Drizzle ORM + MySQL
+- React + Tailwind CSS + Radix UI
+- 独立 Worker 进程（持久化任务队列、Token 刷新）
+- Vitest（单元测试 + 集成测试）
