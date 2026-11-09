@@ -16,7 +16,7 @@
 
 - [适合谁](#适合谁)
 - [功能亮点](#功能亮点)
-- [截图预览](#截图预览截图待补)
+- [截图预览](#截图预览)
 - [OpenAI 风格接入示例](#openai-风格接入示例)
 - [获取源码](#获取源码)
 - [说明](#说明)
@@ -95,9 +95,9 @@
 
 ---
 
-## 截图预览（截图待补）
+## 截图预览
 
-> 下列为占位图链接，图片放在 [`docs/screenshots/`](docs/screenshots/)（目前仅占位，**截图待补**）。
+> 图片在 [`docs/screenshots/`](docs/screenshots/)。界面为真实后台截取，邮箱 / API Key 等已打码。
 
 ![管理后台 · 账号列表](docs/screenshots/admin-accounts.png)
 
