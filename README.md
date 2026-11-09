@@ -16,7 +16,6 @@
 
 - [适合谁](#适合谁)
 - [功能亮点](#功能亮点)
-- [截图预览](#截图预览)
 - [OpenAI 风格接入示例](#openai-风格接入示例)
 - [获取源码](#获取源码)
 - [说明](#说明)
@@ -92,22 +91,6 @@
 
 - Web 接单 + Worker 执行，任务可持久化
 - 对外错误尽量分层（参数 / 审核 / 临时不可用 / 池耗尽等），方便中转站按类型决定是否重试
-
----
-
-## 截图预览
-
-> 图片在 [`docs/screenshots/`](docs/screenshots/)。界面为真实后台截取，邮箱 / API Key 等已打码。
-
-![管理后台 · 账号列表](docs/screenshots/admin-accounts.png)
-
-![管理后台 · 任务列表](docs/screenshots/admin-jobs.png)
-
-![管理后台 · 系统设置](docs/screenshots/admin-settings.png)
-
-![Playground / 测试出图](docs/screenshots/playground-generate.png)
-
-![多参考编辑示例](docs/screenshots/playground-edits.png)
 
 ---
 
